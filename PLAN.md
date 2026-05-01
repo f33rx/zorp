@@ -74,30 +74,34 @@ already speaks.
   [`golang.org/x/crypto/chacha20poly1305`](https://pkg.go.dev/golang.org/x/crypto/chacha20poly1305)
   for AEAD.
 - **Storage**: embedded SQLite, WAL mode. Bodies stored as ciphertext.
-- **Encryption**: server-side only. Single master key, XChaCha20-Poly1305
+- **Encryption**: server-side only. Single master key
+  (`ZORP_KEY` env var; operators may inject from a secret store like
+  [1Password](https://1password.com/) before launch). XChaCha20-Poly1305
   per paste with a random 24-byte nonce. No client-side / fragment-key
   scheme. TLS at the edge handles transport.
 - **Auth**: none. Open POST, rate-limited per IP at the edge.
 - **Audience**: open / multi-user. No accounts; anyone with a URL reads.
-- **TTL**: optional, default **7 days**. `?ttl=<duration>` on POST
-  overrides. Absent = uses default; explicit `?ttl=0` could mean
-  permanent (TBD in Phase 2).
+- **TTL**: default **7 days**. `?ttl=<duration>` on POST overrides,
+  bounded by a server-configured max (above the default). Min 60s.
 - **Rendering**: server-side HTML, no JS framework, no build step.
 - **Wire format**: `zorp=` POST field + plain-text URL response.
+- **Help page**: `GET /` returns a plain-text usage guide -- the
+  canonical `curl -F 'zorp=<-' URL` example front and center.
+- **Domain**: `zorp.shornyak.com`.
 - **Backup**: deferred. `cp pastes.db` is the v1 strategy.
 
 ## Still open
 
-1. **Domain.** Short hostname; the URL is the UX.
-2. **Master key provisioning.** Disk file vs env var vs
-   [1Password](https://1password.com/) agent. File on a separate volume
-   from the DB is the simplest answer.
-3. **TTL semantics at the edges.** Is `?ttl=0` "permanent" or "burn
-   after read"? Is the max TTL configurable or hard-coded? Decide
-   during Phase 2.
-4. **Help page content.** What does `GET /` actually print?
-   Plain-text usage with the canonical `curl -F 'zorp=<-' URL`
-   example. Quick decision in Phase 1.
+1. **Content-Type at upload.** Server can't infer language from
+   `multipart/form-data`. Options: always store as
+   `text/plain; charset=utf-8` and let `?lang` pick the lexer at
+   render time, accept a `?ct=` query, or sniff. Decide before
+   Phase 1.
+2. **Body size cap.** Pick a number (e.g. 64 KiB / 1 MiB / 5 MiB).
+3. **Rate-limit policy.** Per-IP per-minute and per-day thresholds
+   for Caddy.
+4. **Logging policy.** What the service logs. IPs and ids fine;
+   body bytes never.
 
 ## Phases
 
