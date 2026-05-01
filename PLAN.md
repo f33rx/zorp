@@ -69,9 +69,9 @@ already speaks.
 - **Language**: Go. Pure-Go SQLite (`modernc.org/sqlite`), `chroma` for
   highlighting, `golang.org/x/crypto/chacha20poly1305` for AEAD.
 - **Storage**: embedded SQLite, WAL mode. Bodies stored as ciphertext.
-- **Encryption**: server-side only, envelope (per-paste DEK wrapped
-  with a master KEK). No client-side / fragment-key scheme. TLS at the
-  edge handles transport.
+- **Encryption**: server-side only. Single master key, XChaCha20-Poly1305
+  per paste with a random 24-byte nonce. No client-side / fragment-key
+  scheme. TLS at the edge handles transport.
 - **Auth**: none. Open POST, rate-limited per IP at the edge.
 - **Audience**: open / multi-user. No accounts; anyone with a URL reads.
 - **TTL**: optional, default **7 days**. `?ttl=<duration>` on POST
@@ -84,8 +84,8 @@ already speaks.
 ## Still open
 
 1. **Domain.** Short hostname; the URL is the UX.
-2. **KEK provisioning.** Disk file vs env var vs 1Password agent.
-   File on a separate volume from the DB is the simplest answer.
+2. **Master key provisioning.** Disk file vs env var vs 1Password
+   agent. File on a separate volume from the DB is the simplest answer.
 3. **TTL semantics at the edges.** Is `?ttl=0` "permanent" or "burn
    after read"? Is the max TTL configurable or hard-coded? Decide
    during Phase 2.
@@ -98,8 +98,8 @@ already speaks.
 0. **Decide** remaining open items above.
 1. **Walking skeleton.** SQLite-backed POST/GET, plain text response,
    no encryption yet, no rendering. The CLI works end-to-end.
-2. **Storage hardening.** Envelope encryption, TTL sweeper, read-path
-   TTL enforcement.
+2. **Storage hardening.** Encrypt body BLOBs with the master key,
+   TTL sweeper, read-path TTL enforcement.
 3. **Rendering.** Chroma highlighting, single HTML template,
    light/dark CSS, line anchors.
 4. **Edge + deploy.** Caddy with TLS, rate limit, body cap. Manual
@@ -112,9 +112,9 @@ already speaks.
   attracts warez, spam, illegal content. Per-IP rate limits + 7d TTL
   + body cap reduce blast radius; be ready to add an API key or
   basic-auth if abuse gets bad.
-- **KEK loss = data loss.** Lost master key = unrecoverable noise.
-  Back the key up to two physically separate locations; never store
-  it on the same volume as the DB.
+- **Master key loss = data loss.** Lost key = unrecoverable noise.
+  Back it up to two physically separate locations; never store it
+  on the same volume as the DB.
 - **SQLite single writer.** Fine for personal scale. Migrate to
   Postgres if it ever bites.
 - **Wire-format lock-in.** `zorp=` POST field, plaintext URL
