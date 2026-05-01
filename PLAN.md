@@ -1,9 +1,10 @@
 # zorp -- project plan
 
-A self-hosted public pastebin. Single Go binary, embedded SQLite,
-server-side encryption at rest, 7-day default TTL, syntax highlighting
-on demand. The HTTP API is the entire UX -- `curl`, the `zorp` CLI,
-and a browser all use the same URLs.
+A self-hosted public pastebin. Single [Go](https://go.dev/) binary,
+embedded [SQLite](https://www.sqlite.org/), server-side encryption at
+rest, 7-day default TTL, syntax highlighting on demand. The HTTP API
+is the entire UX -- [`curl`](https://curl.se/), the `zorp` CLI, and a
+browser all use the same URLs.
 
 ## Goals
 
@@ -12,7 +13,7 @@ and a browser all use the same URLs.
   numbers (`?py`, `?go`, etc.).
 - Pastes auto-expire after 7 days unless told otherwise.
 - Bodies are encrypted at rest.
-- Single host, two-process deploy (Caddy + zorp).
+- Single host, two-process deploy ([Caddy](https://caddyserver.com/) + zorp).
 
 ## Non-goals
 
@@ -36,11 +37,12 @@ and a browser all use the same URLs.
        +---------+
 ```
 
-- **Edge (Caddy)**: TLS via Let's Encrypt, per-IP rate limiting, body
-  size cap. No auth.
-- **Service (zorp)**: one Go binary. Owns `pastes.db` (SQLite, WAL).
-  Handles POST/GET, server-side rendering with chroma, periodic TTL
-  sweep.
+- **Edge (Caddy)**: TLS via [Let's Encrypt](https://letsencrypt.org/),
+  per-IP rate limiting, body size cap. No auth.
+- **Service (zorp)**: one Go binary. Owns `pastes.db` (SQLite,
+  [WAL](https://www.sqlite.org/wal.html)). Handles POST/GET,
+  server-side rendering with [chroma](https://github.com/alecthomas/chroma),
+  periodic TTL sweep.
 
 Two processes total. `pastes.db` is on a host bind-mount; the master
 encryption key file lives on a separate volume so disk-level
@@ -66,8 +68,11 @@ already speaks.
 
 ## Decisions locked
 
-- **Language**: Go. Pure-Go SQLite (`modernc.org/sqlite`), `chroma` for
-  highlighting, `golang.org/x/crypto/chacha20poly1305` for AEAD.
+- **Language**: Go. Pure-Go SQLite via
+  [`modernc.org/sqlite`](https://pkg.go.dev/modernc.org/sqlite),
+  [`chroma`](https://github.com/alecthomas/chroma) for highlighting,
+  [`golang.org/x/crypto/chacha20poly1305`](https://pkg.go.dev/golang.org/x/crypto/chacha20poly1305)
+  for AEAD.
 - **Storage**: embedded SQLite, WAL mode. Bodies stored as ciphertext.
 - **Encryption**: server-side only. Single master key, XChaCha20-Poly1305
   per paste with a random 24-byte nonce. No client-side / fragment-key
@@ -84,8 +89,9 @@ already speaks.
 ## Still open
 
 1. **Domain.** Short hostname; the URL is the UX.
-2. **Master key provisioning.** Disk file vs env var vs 1Password
-   agent. File on a separate volume from the DB is the simplest answer.
+2. **Master key provisioning.** Disk file vs env var vs
+   [1Password](https://1password.com/) agent. File on a separate volume
+   from the DB is the simplest answer.
 3. **TTL semantics at the edges.** Is `?ttl=0` "permanent" or "burn
    after read"? Is the max TTL configurable or hard-coded? Decide
    during Phase 2.
@@ -104,7 +110,8 @@ already speaks.
    light/dark CSS, line anchors.
 4. **Edge + deploy.** Caddy with TLS, rate limit, body cap. Manual
    backup procedure documented.
-5. **Polish.** Vim plugin, zorp `--clipboard` polish, whatever else.
+5. **Polish.** [Vim](https://www.vim.org/) plugin, zorp `--clipboard`
+   polish, whatever else.
 
 ## Risks
 
@@ -116,7 +123,7 @@ already speaks.
   Back it up to two physically separate locations; never store it
   on the same volume as the DB.
 - **SQLite single writer.** Fine for personal scale. Migrate to
-  Postgres if it ever bites.
+  [Postgres](https://www.postgresql.org/) if it ever bites.
 - **Wire-format lock-in.** `zorp=` POST field, plaintext URL
   response, `?lang` for highlighting. Treat as a stable contract.
 
