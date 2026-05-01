@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+# Project: zorp
+# Description: CLI client for a zorp server. Uploads stdin and returns
+# a URL.
+import argparse
+import os
+import sys
+from select import select
+from subprocess import Popen
+from typing import Tuple
+
+import requests
+
+url = os.environ.get("ZORP_URL", "http://localhost:8080")
+timeout = int(os.environ.get("ZORP_SERVER_TIMEOUT", 5))
+
+
+def has_data(fd: int) -> bool:
+    return select([fd], [], [], 0.0) == ([fd], [], [])
+
+
+def quit(code: int, msg: str) -> int:
+    print(msg)
+    return code
+
+
+def get_paste(id: int) -> Tuple[int, str]:
+    paste_url = f"{url}/{id}"
+
+    try:
+        response = requests.get(paste_url, timeout=timeout)
+    except requests.exceptions.ReadTimeout:
+        return 1, "error: http request timed out"
+    except requests.exceptions.ConnectTimeout:
+        return 1, "error: http connection timed out"
+
+    if response.status_code != requests.codes.ok:
+        return 1, f"error: invalid http status code {response.status_code}"
+
+    content = response.content.decode().rstrip()
+
+    if content == f"{id} not found.":
+        return 1, f"error: paste with id '{id}' could not be found"
+
+    return 0, content
+
+
+def post_paste(text: str) -> Tuple[int, str]:
+    post_data = {"zorp": text}
+
+    try:
+        response = requests.post(url, data=post_data, timeout=timeout)
+    except requests.exceptions.ReadTimeout:
+        return 1, "error: http request timed out"
+    except requests.exceptions.ConnectTimeout:
+        return 1, "error: http connection timed out"
+
+    if response.status_code != requests.codes.ok:
+        return 1, f"error: invalid http status code {response.status_code}"
+
+    return 0, response.content.decode().rstrip()
+
+
+def get_default_clipper() -> str:
+    if "WAYLAND_DISPLAY" in os.environ:
+        return "wl-copy -p"
+    elif "DISPLAY" in os.environ:
+        return "xclip -sel primary"
+    if sys.platform == "darwin":
+        return "pbcopy"
+    return "echo 'error: unable to find a clipboard command'"
+
+
+def main() -> int:
+    help_description = f"Upload text from stdin to {url}. If [id] "
+    help_description += "is provided,\nthe corresponding paste is fetched "
+    help_description += "and displayed instead."
+    footer = """environment variables:
+  ZORP_URL (default: http://localhost:8080)
+  ZORP_CLIPPER (default: platform-detected)
+  ZORP_SERVER_TIMEOUT (default: 5)
+"""
+
+    default_clipper = os.environ.get("ZORP_CLIPPER", get_default_clipper())
+    parser = argparse.ArgumentParser(
+        description=help_description,
+        epilog=footer,
+        formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument("--clip-command", "-cc", metavar="clip_command",
+                        default=default_clipper,
+                        help="clipboard command (default: ZORP_CLIPPER)")
+    parser.add_argument("--clipboard", "-c", metavar="clipboard",
+                        action="store_const", const=True, default=False,
+                        help="pipe stdout to --clip-command")
+    parser.add_argument("id", nargs="?",
+                        help="fetches and displays a paste")
+    args = parser.parse_args()
+
+    if args.id is not None:
+        http = False
+
+        if args.id[:4] == "http":
+            if args.id[:len(url)] != url:
+                return quit(1, f"error: URLs must begin with '{url}'")
+            http = True
+
+        paste_id = args.id.split("/")[-1] if http else args.id
+        if not paste_id:
+            return quit(1, "error: no id provided")
+
+        return_code, response = get_paste(paste_id)
+        if return_code:
+            return quit(return_code, response)
+
+        print(response)
+    else:
+        try:
+            stdin = sys.stdin.read()
+        except UnicodeDecodeError as exc:
+            return quit(2, f"error: {str(exc)}")
+
+        if not has_data(sys.stdin):
+            return quit(1, "error: no data given via stdin")
+
+        return_code, response = post_paste(stdin)
+        if return_code:
+            return quit(return_code, response)
+
+        print(response)
+
+        if args.clipboard:
+            cmdline = f'printf %s "{response}" | {args.clip_command}'
+            proc = Popen(["/bin/sh", "-c", cmdline])
+            proc.wait()
+
+    return 0
+
+
+if __name__ == "__main__":
+    e = main()
+    sys.exit(e)

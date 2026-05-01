@@ -1,0 +1,12 @@
+# python
+__pycache__/
+*.py[cod]
+
+# macos
+.DS_Store
+
+# future zorp service runtime
+pastes.db
+pastes.db-wal
+pastes.db-shm
+secrets/
